@@ -1,0 +1,117 @@
+---
+title: 'Computacion Estadistica Clase #7R'
+author: "Nicolas Galindo Ramirez"
+date: '2022-04-07'
+output:
+  pdf_document: default
+  html_document: default
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+library(ape)
+```
+
+## Datos georeferenciados (área)
+
+```{r}
+library(readxl)
+XPABLO <- read_excel("XPABLO.xlsx")
+```
+
+## Midiendo dependencia espacial de datos ariales
+
+**Patrones de tipo espacial**
+
+## Indice de Moran (autocorrelación)
+
+
+## Creación de coordenadas artificiales
+
+```{r}
+set.seed(123)
+xy <- expand.grid(x = seq(0,60,10),
+                  y = seq(0,60,5))
+rto <- rnorm(91, mean = 200, sd = 10)
+color <- cut(rto, breaks = 5)
+plot(xy, pch = 8, cex = 1.5, col = color)
+```
+
+## Matriz de distacia
+
+```{r}
+dist_matrix <- as.matrix(dist(cbind(xy$x, xy$y))) # Distancia de la matriz
+which.max(dist_matrix) # Es la posición de la máxima
+max(dist_matrix) # Mayor valor 
+min(dist_matrix) # Menor valor
+dim(xy)
+```
+
+```{r}
+dist_matrix
+```
+
+## Inversa de la distancia
+
+```{r}
+dist_matrix_inv <- 1 / dist_matrix # Element wise
+diag(dist_matrix_inv) <- 0
+dist_matrix_inv
+```
+
+```{r}
+Moran.I(rto, dist_matrix_inv) # p.value < 0.05 <- Dependencia espacial
+dim(dist_matrix_inv)
+```
+
+## Asignación
+
+**Hallar el indice de Moran para las variables del archivo XPABLO**
+**Vecinos más cercanos, es decir, máximo X distancia**
+
+#Datos Georeferenciados (area)
+##Matriz Distancia
+```{r}
+dist_matrizp <- as.matrix(dist(cbind(XPABLO$Long,XPABLO$Lat)))# Distancia matriz
+which.max(dist_matrizp) # Es la posición de la máxima
+max(dist_matrizp) # Mayor valor 
+min(dist_matrizp) # Menor valor
+dim(XPABLO)
+```
+## Inversa de la distancia
+```{r}
+dist_matriz_inv <- 1 / dist_matrizp # Element wise
+diag(dist_matriz_inv) <- 0
+which.max(dist_matriz_inv) # Es la posición de la máxima
+max(dist_matriz_inv) # Mayor valor 
+min(dist_matriz_inv) # Menor valor
+```
+```{r}
+dist_matrizp 
+
+```
+```{r}
+dist_matriz_inv 
+
+```
+
+```{r}
+yz <- expand.grid(x = XPABLO$Long,
+                  y = XPABLO$Lat)
+plot(yz, pch = 8, cex = .05, col = "green")
+```
+
+## Indices de Moran
+
+```{r}
+library(foreach)
+
+XPABLO2 <- as.data.frame(XPABLO)
+names <- colnames(XPABLO2)
+for(i in 5:15){
+  print(names[i])
+  Moran_i <- ape::Moran.I(x = XPABLO2[,i], weight = dist_matriz_inv)
+  print(Moran_i)
+}
+
+```
