@@ -1,0 +1,186 @@
+---
+title: "Estrategia de Construcción de Modelos para Regresión Logística: Selección Intencional"
+author: "Nicolás Galindo Ramírez"
+output: pdf_document
+date: '2022-07-03'
+---
+
+## ![ARTICULO] (doi:10.21037/atm.2016.02.15)
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+library(dplyr)
+library(ggplot2)
+library(ResourceSelection)
+library(Deducer)
+library(lattice)
+library(faux)
+```
+
+```{r}
+set.seed(1022409637)
+df <- rnorm_multi(n = 120,
+            mu = c(0.5, 300, 30, 35, 0.6),
+            sd = c(0.2, 20, 5, 8, 0.15),
+            r = c(0.8, 0.7, 0.5, 0.6, 0.8, 0.4, 0.3, 0.4, 0.4, 0.5), 
+            ## Correlación de pares de variables
+            varnames = c('Compacto', 'Labranza', 'Arena', 'Arcilla','Mecanizado'))
+```
+```{r}
+df$Compacto <- round(df$Compacto)
+df$Mecanizado <- cut(df$Mecanizado, breaks = 3,labels = c('Baja','Media','Alta'))
+df
+```
+## Análisis univariado
+
+#### Labranza:
+```{r}
+univariable_labranza <- glm(df$Compacto ~ df$Labranza, family = binomial, data=df)
+summary(univariable_labranza)
+```
+#### Arena:
+```{r}
+univariable_arena <- glm(Compacto ~ Arena, family = binomial, data=df)
+summary(univariable_arena)
+```
+#### Arcilla: 
+```{r}
+univariable_arcilla <- glm(Compacto ~ Arcilla, family = binomial, data=df)
+summary(univariable_arcilla)
+```
+#### Mecanizado
+```{r}
+univariable_meca <- glm(Compacto ~ Mecanizado, family = binomial, data=df)
+summary(univariable_meca)
+```
+### Con respecto al analisis univariado se evidencia que todas las variables parecieran estar relacionadas con la compactación del suelo, exceptuando la labranza media, la cual pareciera no estar relacionada. Por otro lado, este analisis no es tan profundo por lo que se realiza un analisis multivariado.
+
+#Analisis Multivariado
+
+#### Este paso se ajusta al modelo multivariable que comprende todas las variables identificadas en el paso anterior.
+```{r}
+model1 <- glm(Compacto ~ Labranza + Arena + Arcilla + Mecanizado, family = binomial, data = df)
+summary(model1)
+```
+
+#### Se elimina la variable con el pvalue más alto
+```{r}
+model2 <- glm(Compacto ~ Labranza + Arena + Mecanizado, family = binomial, data = df) 
+summary(model2)
+```
+# Delta Beta
+```{r}
+delta.coef <- abs((coef(model2)-coef(model1)[-c(5)])/coef(model1)[-c(5)])
+round(delta.coef, 3)
+```
+#### Se decide no eliminar ninguna variable, debido a que los cambios al eliminar la variable de pvalue más alto seria muy grande, lo cual afecta al modelo. En otras palabras el modelo se volveria inestable, por regla del 20%. 
+
+```{r}
+model_finalhibrido <- glm(Compacto ~ Labranza + Arena + Mecanizado, family = binomial, data = df) 
+summary(model_finalhibrido)
+```
+#### Sin embargo se procede a verificar el anterior supuesto:
+```{r}
+model_final <- glm(Compacto ~ Labranza + Arena, family = binomial, data = df) 
+summary(model_final)
+```
+```{r}
+library(lmtest)
+lrtest(model_finalhibrido, model_final)
+```
+```{r}
+anova(model_finalhibrido, model_final, test = "Chisq")
+```
+#### Se confirma que los modelos no son estadisticamente iguales (pvalue > 0,05), por lo que se rectifica que se debe trabajar con el modelo final hibrido, es decir, sin remover la variable "Mecanizado"
+
+# Supuestos de Linealidad
+
+```{r}
+pred <- model_finalhibrido$fitted.values
+prob <- ifelse(pred < 0.5, 1, 0)
+hist(prob)
+```
+### Utilizando las probabilidades predichas, por lo que no se tiene una probabilidad (pr) tal como se tiene en el articulo.
+
+```{r}
+par(mfrow = c(1,3))
+media_L <- mean(df$Labranza)
+colores <- ifelse(df$Labranza < media_L, 'blue', 'red')
+plot(model_finalhibrido$fitted.values, cex = (df$Labranza * 0.005), pch = 19, col = colores)
+abline(h = 0.5, cex = 1.5, col = 'green')
+
+media_A <- mean(df$Arena)
+colores <- ifelse(df$Arena < media_A, 'blue', 'red')
+plot(model_finalhibrido$fitted.values, cex = (df$Arena * 0.05), pch = 19, col = colores)
+abline(h = 0.5, cex = 1.5, col = 'green')
+
+media_M <- mean(df$Mecanizado)
+colores <- ifelse(df$Mecanizado < media_M, 'blue', 'red')
+plot(model_finalhibrido$fitted.values, cex = (df$Mecanizado*1000), pch = 19, col = colores)
+abline(h = 0.5, cex = 1.5, col = 'green')
+```
+##### Ninguna de las variables es apropiada para discriminar.
+
+# Interacciones del Modelo
+
+```{r}
+model_inter1 <- glm(df$Compacto ~ df$Labranza + df$Arena + df$Mecanizado + df$Mecanizado:df$Labranza, family = binomial, data = df)
+summary(model_inter1)
+```
+```{r}
+model_inter2 <- glm(df$Compacto ~ df$Labranza + df$Arena + df$Mecanizado + df$Arena:df$Mecanizado, family = binomial, data = df)
+summary(model_inter2)
+```
+```{r}
+model_inter3 <- glm(df$Compacto ~ df$Labranza + df$Arena + df$Mecanizado + df$Labranza:df$Arena, family = binomial, data = df)
+summary(model_inter3)
+```
+```{r}
+model_inter4 <- glm(df$Compacto ~ df$Labranza + df$Arena + df$Mecanizado + df$Labranza:df$Arena:df$Mecanizado, family = binomial, data = df)
+summary(model_inter4)
+```
+```{r}
+model_inter5 <- glm(df$Compacto ~ df$Labranza + df$Arena + df$Mecanizado + df$Labranza:df$Arena+ df$Arena:df$Mecanizado + df$Labranza:df$Mecanizado + df$Labranza:df$Arena:df$Mecanizado, family = binomial, data = df)
+summary(model_inter5)
+```
+#### Se evidencia que no hay ninguna interracción util para este caso, por lo que ninguno de estos modelos se queda. Por lo que el mejor modelo sigue siendo model_finalhibrido.
+
+```{r}
+rta= model_finalhibrido$fitted.values
+prop_ab <- rta*100
+cat_Labranza <- cut(df$Labranza, breaks = 4)
+cat_Arena <- cut(df$Arena, breaks=4)
+df2 <- data.frame(cat_Labranza, cat_Arena, prop_ab)
+
+tips2 <- df2 %>% 
+  group_by(cat_Arena, cat_Labranza) %>% 
+  summarise(media_prop_compacto = mean(prop_ab))
+```
+#Graficando Variables Labranza y Arena
+```{r}
+library(ggplot2)
+tips2$tip_groups
+ggplot(data = tips2) +
+  aes(x = cat_Labranza, y = media_prop_compacto, color = cat_Arena) +
+  geom_line(aes(group = cat_Arena))
+```
+#Paso 5: Evaluación del ajuste del modelo
+```{r}
+hoslem.test(model_finalhibrido$y, fitted(model_finalhibrido))
+```
+#### El valor de P es 0,59, lo que nos indica que no hay una diferencia significativa entre los valores observados y predichos. Este ajuste en el modelo tambien se puede analizar en graficas
+
+```{r}
+Predprob<-predict(model_finalhibrido,type="response")
+plot(Predprob,jitter(as.numeric(df$Compacto), 0.5), cex=0.8,     ylab="Compactos")
+abline(v = 0.5, col = 'red')
+text(x = 0.77, y = 0.55, 'Alta probabilidad de Suelos \n Compactos predicha \n y observada')
+text(x = 0.25, y = 0.45, 'Alta probabilidad de Suelos \n no Compactos predicha \n y observada')
+```
+
+```{r}
+rocplot(model_finalhibrido)
+```
+## En estos graficos se observa que hubo bastantes aciertos de forma predicha y observada con respecto a si el suelo esta compacto o no.
+
+
